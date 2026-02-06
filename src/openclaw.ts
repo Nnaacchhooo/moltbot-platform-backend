@@ -1,71 +1,55 @@
-import { exec } from 'child_process';
-import { promisify } from 'util';
-
-const execAsync = promisify(exec);
+import fetch from 'node-fetch';
 
 /**
- * OpenClaw Gateway Integration
- * Connects to the local OpenClaw Gateway to send messages to MoltBot
+ * OpenClaw Integration via Proxy
+ * Connects to MoltBot through a proxy server
  */
 class OpenClawIntegration {
-  private gatewayUrl: string;
-  private sessionKey: string;
+  private proxyUrl: string;
 
   constructor() {
-    this.gatewayUrl = process.env.OPENCLAW_GATEWAY_URL || 'http://localhost:3380';
-    this.sessionKey = 'agent:main:main';
+    // Use proxy server that has access to openclaw CLI
+    this.proxyUrl = process.env.OPENCLAW_PROXY_URL || 'http://localhost:3002';
   }
 
   /**
-   * Send a message to MoltBot via OpenClaw Gateway
+   * Send a message to MoltBot via proxy
    */
   async sendMessage(text: string): Promise<string> {
     try {
-      // Using openclaw CLI to send message
-      // This will interact with the main agent session
-      const command = `openclaw sessions send --session="${this.sessionKey}" --message="${text.replace(/"/g, '\\"')}"`;
-      
-      console.log('Executing:', command);
-      const { stdout, stderr } = await execAsync(command, {
-        timeout: 30000, // 30s timeout
-        env: { ...process.env }
+      const response = await fetch(`${this.proxyUrl}/api/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ message: text }),
+        signal: AbortSignal.timeout(30000) // 30s timeout
       });
 
-      if (stderr) {
-        console.error('OpenClaw stderr:', stderr);
+      if (!response.ok) {
+        throw new Error(`Proxy responded with ${response.status}`);
       }
 
-      return stdout.trim() || 'Message sent to MoltBot';
+      const data = await response.json() as any;
+      return data.response || 'Message sent to MoltBot';
     } catch (error) {
-      console.error('Error sending to OpenClaw:', error);
+      console.error('Error sending to MoltBot:', error);
       throw new Error('Failed to communicate with MoltBot');
     }
   }
 
   /**
-   * List active sessions
+   * List active sessions (not implemented yet)
    */
   async listSessions(): Promise<any[]> {
-    try {
-      const { stdout } = await execAsync('openclaw sessions list --json');
-      return JSON.parse(stdout);
-    } catch (error) {
-      console.error('Error listing sessions:', error);
-      return [];
-    }
+    return [];
   }
 
   /**
-   * Get session status
+   * Get session status (not implemented yet)
    */
   async getSessionStatus(sessionKey: string): Promise<any> {
-    try {
-      const { stdout } = await execAsync(`openclaw sessions status --session="${sessionKey}" --json`);
-      return JSON.parse(stdout);
-    } catch (error) {
-      console.error('Error getting session status:', error);
-      return null;
-    }
+    return null;
   }
 }
 
